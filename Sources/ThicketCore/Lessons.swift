@@ -8,6 +8,7 @@ public struct Lesson: Identifiable, Equatable {
         case placeSomething
         case kickSomething
         case clearAllMites
+        case clearMites(atLeast: Int)
         case makeStarseed
     }
 
@@ -49,6 +50,8 @@ public struct Lesson: Identifiable, Equatable {
             return events.contains { if case .kicked = $0 { return true } else { return false } }
         case .clearAllMites:
             return s.status == .won
+        case let .clearMites(n):
+            return s.mitesCleared >= n
         case .makeStarseed:
             return events.contains { if case .starseedCreated = $0 { return true } else { return false } }
         }
@@ -67,20 +70,24 @@ public struct Lesson: Identifiable, Equatable {
                board: [". . . . T", ". . . . E"], pipColumn: 3, pipFacing: .right,
                carrying: [], goal: .carry(atLeast: 2)),
         Lesson(id: "drop", title: "Dropping",
-               text: "While carrying, press Up, A, B or A+B to set the load down in front of you. Press Down to put it under your feet and stand on it.",
+               text: "While carrying, A sets the whole load down in front of you and B sets down just the bottom piece. Up, Down or A+B drops it right where you stand and you hop on top.",
                board: [], pipColumn: 3, pipFacing: .right, carrying: ["E", "T"], goal: .placeSomething),
         Lesson(id: "kick", title: "Kicking",
                text: "Hold Down and press A to kick the piece in front of you. It slides along until it hits something, then falls.",
                board: [". . T"], pipColumn: 1, pipFacing: .right, carrying: [], goal: .kickSomething),
         Lesson(id: "match", title: "Matching",
-               text: "Line up 3 or more of one color - across, up or diagonally - and include at least one Seed. Three Mites alone never match. Drop the Seed next to the two Mites.",
+               text: "Line up 3 or more of one color - across, up or diagonally - and include at least one Seed. Three Mites alone never match. Press A to set the Seed down next to the two Mites.",
                board: ["E E"], pipColumn: 3, pipFacing: .left, carrying: ["e"], goal: .clearAllMites),
+        Lesson(id: "hold", title: "Hold & Match",
+               text: "What Pip holds over his head is part of the field too. Press B to pull up the Seed - held up high it finishes the diagonal line.",
+               board: [". . . E", ". . E B", ". . B T", "e . T B"], pipColumn: 1, pipFacing: .left,
+               carrying: [], goal: .clearMites(atLeast: 2)),
         Lesson(id: "vertical", title: "Stacking",
-               text: "Lines count vertically too. Face the two Mites and drop the Seed on top of them.",
+               text: "Lines count vertically too. Face the two Mites and press A to drop the Seed on top of them.",
                board: [". . . b E", ". . . t E"], pipColumn: 3, pipFacing: .right,
                carrying: ["e"], goal: .clearAllMites),
         Lesson(id: "starseed", title: "Starseeds",
-               text: "Clearing 5 or more in one line grows a Starseed. Fill the gap to make a line of five. Match a Starseed later to clear every Mite of its color!",
+               text: "Clearing 5 or more in one line grows a Starseed. Press A to fill the gap and make a line of five. A Starseed gets a random color - match it to clear every Mite of that color!",
                board: ["E E . E E . T"], pipColumn: 1, pipFacing: .right, carrying: ["e"], goal: .makeStarseed),
     ]
 }

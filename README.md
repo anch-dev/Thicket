@@ -30,7 +30,7 @@ Colors are chosen to be colorblind-friendly (based on the Okabe-Ito palette). Ea
 | Tide (blue) | pointed | ▲ |
 | Bloom (pink) | square | ■ |
 
-Pieces that Pip is carrying are out of play. They don't match and Starseeds don't clear them.
+**What Pip holds above his head is part of the field**: held pieces count toward lines, so holding a Seed up level with two Mites (across, up, or on a diagonal) clears them. A Starseed also clears held Mites of its color. A Starseed's color is random, not the color of the line that made it.
 
 ## Modes
 
@@ -49,9 +49,10 @@ Pieces that Pip is carrying are out of play. They don't match and Starseeds don'
 | Climb down while clinging | Down | Down | ↓ or S |
 | Lift the piece in front **and everything above it** | A | A (south) | X or K |
 | Pull out **only** the piece in front | B | B (east) | Z or J |
-| Put down what you carry **in front** | Up, A+B, A or B | Up, X/Y, A or B | ↑, C/L/Space, X or Z |
-| Put down what you carry **under Pip** (he stands on it) | Down | Down | ↓ or S |
-| Kick the piece in front | Hold Down + A | Down + A | ↓ + X |
+| Put the **whole load** down in front | A | A | X or K |
+| Put down **only the bottom piece** in front | B | B | Z or J |
+| Drop the load **where Pip stands** and hop on top | Up, Down or A+B | Up, Down, X/Y | ↑, ↓, C/L/Space |
+| Kick the piece in front | Hold Down + A or B | Down + A/B | ↓ + X/Z |
 | Pause | II / START | Menu | Esc / P / Return |
 
 Pip can only reach the piece directly in front of him at his own height.

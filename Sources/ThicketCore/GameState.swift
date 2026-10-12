@@ -128,13 +128,17 @@ public struct GameState: Codable, Equatable {
     func decode(_ input: InputFrame) -> PipAction? {
         let p = input.pressed
         let down = input.held.contains(.down) || p.contains(.down)
+        let a = p.contains(.a), b = p.contains(.b)
         if pip.isCarrying {
-            // Down (alone or with A/B) puts the load under Pip; A, B, A+B or Up put it in front.
-            if p.contains(.down) || (down && !p.intersection([.a, .b]).isEmpty) { return .placeBelow }
-            if !p.intersection([.a, .b, .up]).isEmpty { return .place }
+            // Up, Down or A+B: drop the load beneath Pip and hop on top of it.
+            // A: put the whole load down in front. B: put down only the bottom piece.
+            if p.contains(.up) || p.contains(.down) || (a && b) || (down && (a || b)) { return .placeBelow }
+            if a { return .place }
+            if b { return .placeOne }
         } else {
-            if p.contains(.a) { return down ? .kick : .liftStack }
-            if p.contains(.b) { return .pull }
+            if (a || b) && down { return .kick }
+            if a { return .liftStack }
+            if b { return .pull }
             if p.contains(.up) { return .climb }
             if p.contains(.down) { return pip.clinging ? .climbDown : nil }
         }
@@ -223,11 +227,12 @@ public struct GameState: Codable, Equatable {
         case .pull: failure = lift(whole: false)
         case .kick: failure = kick()
         case .place: failure = place()
+        case .placeOne: failure = placeOne()
         case .placeBelow: failure = placeBelow()
         }
         guard let reason = failure else { return true }
         events.append(.actionRejected(action: action, reason: reason))
-        if [.liftStack, .pull, .kick, .place, .placeBelow].contains(action) {
+        if [.liftStack, .pull, .kick, .place, .placeOne, .placeBelow].contains(action) {
             events.append(.bump)
         }
         return false
@@ -374,7 +379,7 @@ public struct GameState: Codable, Equatable {
         let n = pip.carried.count
         guard board.contains(column: f) else { return "edge of the field" }
         guard isFree(f, pip.row, height: n) else {
-            return "front column is blocked at Pip's height (try Down to put it under Pip)"
+            return "front column is blocked at Pip's height (Up/Down/A+B puts it under Pip)"
         }
         for (i, p) in pip.carried.enumerated() {
             fallers.append(Faller(piece: p, column: f, row: pip.row + i,
@@ -386,7 +391,22 @@ public struct GameState: Codable, Equatable {
         return nil
     }
 
-    /// Down while carrying: set the load down in Pip's own column and stand on top of it.
+    /// B while carrying: put only the bottom piece down in front; the rest stays held.
+    mutating func placeOne() -> String? {
+        guard let bottom = pip.carried.first else { return "not carrying anything" }
+        let f = pip.column + pip.facing.rawValue
+        guard board.contains(column: f) else { return "edge of the field" }
+        guard isFree(f, pip.row) else {
+            return "front column is blocked at Pip's height (Up/Down/A+B puts it under Pip)"
+        }
+        fallers.append(Faller(piece: bottom, column: f, row: pip.row, speed: Rules.placeFallSpeed, origin: .placed))
+        pip.carried.removeFirst()
+        pip.begin(.place, ticks: Rules.pipActionTicks, from: pip.cell)
+        events.append(.placed(count: 1))
+        return nil
+    }
+
+    /// Up, Down or A+B while carrying: set the load down where Pip stands and hop on top of it.
     mutating func placeBelow() -> String? {
         guard pip.isCarrying else { return "not carrying anything" }
         let grounded = pip.row == 0 || board.piece(pip.column, pip.row - 1) != nil
@@ -413,7 +433,7 @@ public struct GameState: Codable, Equatable {
             || isFree(pip.column + 1, pip.row, height: pip.carried.count + 1) {
             return true
         }
-        let actions: [PipAction] = [.climb, .liftStack, .pull, .kick, .place, .placeBelow]
+        let actions: [PipAction] = [.climb, .liftStack, .pull, .kick, .place, .placeOne, .placeBelow]
         for facing in [Facing.left, Facing.right] {
             var probe = self
             probe.pip.facing = facing
@@ -607,13 +627,24 @@ public struct GameState: Codable, Equatable {
 
     // MARK: - Matches
 
+    /// Pip's load as field cells (it sits above his head and takes part in lines).
+    var heldOverlay: [Cell: Piece] {
+        var o: [Cell: Piece] = [:]
+        for (i, p) in pip.carried.enumerated() { o[Cell(pip.column, pip.row + 1 + i)] = p }
+        return o
+    }
+
     mutating func resolveMatches() {
-        let lines = MatchFinder.findLines(in: board)
+        var overlay = heldOverlay
+        let lines = MatchFinder.findLines(in: board, overlay: overlay)
         guard !lines.isEmpty else {
             board.forEachPiece { $0.chainTag = 0 }
             return
         }
-        var result = board.resolve(lines: lines, nextID: &nextID)
+        var result = board.resolve(lines: lines, overlay: &overlay, nextID: &nextID, rng: &rng)
+        // What is left of the load settles back onto Pip's head.
+        pip.carried = overlay.keys.sorted { $0.row < $1.row }.compactMap { overlay[$0] }
+        for i in pip.carried.indices { pip.carried[i].chainTag = 0 }
         if !result.burstColors.isEmpty {
             let burst = Set(result.burstColors)
             let hitFallers = fallers.filter { $0.piece.isMite && burst.contains($0.piece.color) }
@@ -630,8 +661,8 @@ public struct GameState: Codable, Equatable {
         events.append(.cleared(cells: result.removed, pieces: result.removedPieces,
                                chain: result.chainLevel, score: result.score))
         for c in result.hits { events.append(.hit(cell: c)) }
-        for c in result.starseedsCreated {
-            events.append(.starseedCreated(cell: c, color: board.piece(at: c)?.color ?? lines[0].color))
+        for (c, color) in zip(result.starseedsCreated, result.starseedColors) {
+            events.append(.starseedCreated(cell: c, color: color))
         }
         for color in result.burstColors { events.append(.starseedBurst(color: color)) }
         if result.chainLevel >= 2 {

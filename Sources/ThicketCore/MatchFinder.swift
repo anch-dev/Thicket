@@ -36,14 +36,19 @@ public enum MatchFinder {
         !(p.kind == .mite && p.mite == .slant && !direction.isDiagonal)
     }
 
-    public static func findLines(in board: Board) -> [MatchLine] {
+    /// Finds lines on the board. `overlay` adds pieces that are on the field but
+    /// not settled in a column – the load Pip is holding above his head – so a
+    /// held piece can complete a line.
+    public static func findLines(in board: Board, overlay: [Cell: Piece] = [:]) -> [MatchLine] {
+        func at(_ c: Int, _ r: Int) -> Piece? { board.piece(c, r) ?? overlay[Cell(c, r)] }
+        let starts = board.allCells + overlay.keys.sorted()
         var lines: [MatchLine] = []
         for direction in LineDirection.allCases {
             let (dc, dr) = direction.step
-            for start in board.allCells {
-                guard let p = board.piece(at: start), canJoin(p, direction) else { continue }
+            for start in starts {
+                guard let p = at(start.col, start.row), canJoin(p, direction) else { continue }
                 // Only start scanning at the first cell of a run.
-                if let prev = board.piece(start.col - dc, start.row - dr),
+                if let prev = at(start.col - dc, start.row - dr),
                    canJoin(prev, direction), prev.color == p.color {
                     continue
                 }
@@ -51,7 +56,7 @@ public enum MatchFinder {
                 var hasSeed = p.isSeedLike
                 var c = start.col + dc
                 var r = start.row + dr
-                while let q = board.piece(c, r), canJoin(q, direction), q.color == p.color {
+                while let q = at(c, r), canJoin(q, direction), q.color == p.color {
                     cells.append(Cell(c, r))
                     hasSeed = hasSeed || q.isSeedLike
                     c += dc

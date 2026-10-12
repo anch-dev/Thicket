@@ -44,7 +44,8 @@ final class ResolveTests: XCTestCase {
         var b = try Board.parse(["E E e E E"])
         let r = resolve(&b)
         XCTAssertEqual(r.starseedsCreated, [Cell(2, 0)])
-        XCTAssertEqual(b.notation, [". . e*"])
+        XCTAssertEqual(b.piece(2, 0)?.kind, .starseed, "color is random, as in the classic game")
+        XCTAssertEqual(b.pieceCount, 1)
         XCTAssertEqual(r.score, (4 * Rules.miteScore + Rules.seedScore + 2 * Rules.longLineBonusPerPiece))
     }
 

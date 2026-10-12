@@ -27,7 +27,7 @@ final class GameTests: XCTestCase {
     func testPlayerMadeMatchIsNotAChain() {
         // Pieces dropped by Pip carry no chain tag.
         var s = sandbox(["E E"], pip: 3, facing: .left, carrying: [.seed(.ember, id: 90)])
-        let ev = s.tap(.up)
+        let ev = s.tap(.a)
         XCTAssertEqual(ev.clears.map(\.chain), [1])
         XCTAssertTrue(ev.chainLevels.isEmpty)
     }
@@ -54,14 +54,54 @@ final class GameTests: XCTestCase {
 
     // MARK: Carrying while the board resolves
 
-    func testCarriedPiecesAreOutOfPlay() {
-        // Pip holds an ember Mite and an ember Seed while a Starseed fires.
+    func testStarseedBurstAlsoClearsHeldMites() {
+        // Pip holds a bloom Seed and an ember Mite while an ember Starseed fires.
         var s = sandbox([". . . . . . T", "E E e* . . . T"], pip: 4, facing: .right,
-                        carrying: [.mite(.ember, id: 90), .seed(.ember, id: 91)])
+                        carrying: [.seed(.bloom, id: 91), .mite(.ember, id: 90)])
         let ev = s.settle()
         XCTAssertTrue(ev.has { $0 == .starseedBurst(color: .ember) })
-        XCTAssertEqual(s.pip.carried.count, 2, "carried Mite survives the burst")
-        XCTAssertEqual(s.mitesRemaining, 3)
+        XCTAssertEqual(s.pip.carried.map(\.id), [91], "held ember Mite cleared, the rest of the load stays")
+        XCTAssertEqual(s.mitesRemaining, 2)
+    }
+
+    func testHoldingASeedUpToADiagonalMakesAMatch() {
+        // Two ember Mites on a diagonal; Pip lifts a Seed so it is held at the third cell.
+        var s = sandbox([
+            ". . . E",
+            ". . E B",
+            ". . B T",
+            "e . T B",
+        ], pip: 1, facing: .left)
+        let ev = s.tap(.b)
+        let clear = ev.clears.first
+        XCTAssertNotNil(clear)
+        XCTAssertEqual(Set(clear?.cells ?? []), [Cell(1, 1), Cell(2, 2), Cell(3, 3)])
+        XCTAssertTrue(s.pip.carried.isEmpty, "the held Seed was used up")
+        XCTAssertEqual(s.mitesCleared, 2)
+    }
+
+    func testHeldPiecesMatchHorizontallyAndVertically() {
+        // Holding a Mite next to a Seed + Mite on the stack beside Pip.
+        var h = sandbox([". e E", ". T B"], pip: 0, facing: .right, carrying: [.mite(.ember, id: 90)])
+        XCTAssertEqual(h.pip.row, 0)
+        h.run(2)
+        XCTAssertEqual(h.mitesCleared, 2, "held E + e + E across")
+        // A Seed and two Mites inside the load itself line up vertically.
+        var v = sandbox([], pip: 3, carrying: [.mite(.tide, id: 90), .mite(.tide, id: 91), .seed(.tide, id: 92)])
+        v.run(2)
+        XCTAssertTrue(v.pip.carried.isEmpty)
+        XCTAssertEqual(v.mitesCleared, 2)
+    }
+
+    func testHeldLoadSettlesAfterAMatchInTheMiddle() {
+        // Load: B (bottom), E, T (top). The held E completes a line and is removed;
+        // T drops onto B on Pip's head.
+        var s = sandbox([". . e", ". . E", ". . T"], pip: 1, facing: .right,
+                        carrying: [.mite(.bloom, id: 90), .mite(.ember, id: 91), .mite(.tide, id: 92)])
+        // Held E at (1,2) with (2,2)e... line needs 3: add another E on the left.
+        s.board.setColumn(0, [.mite(.tide, id: 80), .mite(.bloom, id: 81), .mite(.ember, id: 82)])
+        s.run(2)
+        XCTAssertEqual(s.pip.carried.map(\.id), [90, 92])
     }
 
     func testBoardResolvesUnderneathACarriedLoad() {
@@ -222,7 +262,7 @@ final class GameTests: XCTestCase {
 
     func testRoundWonWhenLastMiteCleared() {
         var s = sandbox(["E E"], pip: 3, facing: .left, carrying: [.seed(.ember, id: 90)], winOnClear: true)
-        let ev = s.tap(.up)
+        let ev = s.tap(.a)
         XCTAssertEqual(s.status, .won)
         XCTAssertTrue(ev.has { if case .roundCleared = $0 { return true } else { return false } })
     }
@@ -372,9 +412,10 @@ final class GameTests: XCTestCase {
             "lift": [(.a, [])],
             "drop": [(.up, [])],
             "kick": [(.a, .down)],
-            "match": [(.up, [])],
-            "vertical": [(.up, [])],
-            "starseed": [(.up, [])],
+            "match": [(.a, [])],
+            "hold": [(.b, [])],
+            "vertical": [(.a, [])],
+            "starseed": [(.a, [])],
         ]
         XCTAssertEqual(Set(scripts.keys), Set(Lesson.all.map(\.id)))
         for lesson in Lesson.all {

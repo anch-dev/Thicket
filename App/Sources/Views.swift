@@ -318,9 +318,12 @@ struct SettingsView: View {
 
     var controlsHelp: String {
         """
-        CONTROLLER: D-pad/stick move - A lift stack - B pull one - X/Y = A+B - Menu pauses.
+        CONTROLLER: D-pad/stick move - A lift stack - B lift one - X/Y = A+B - Menu pauses.
         KEYBOARD: Arrows/WASD move - X/K = A - Z/J = B - C/L/Space = A+B - Return start - Esc/P pause.
-        Down+A kicks. Walk into a stack to climb it. While carrying, Up, A, B or A+B puts the load down in front; Down puts it under your feet.
+        Down+A or Down+B kicks. Walk into a stack to climb it.
+        While carrying: A puts the whole load down in front, B puts down only the bottom piece,
+        Up / Down / A+B drop it where you stand and you hop on top.
+        What Pip holds above his head is part of the field and counts toward lines.
         """
     }
 }

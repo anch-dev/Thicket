@@ -111,7 +111,7 @@ final class PipTests: XCTestCase {
         var s = sandbox([". . . . B", ". . . . T", ". . . . E"], pip: 3, facing: .right)
         s.tap(.a)
         s.tap(.left) // turn
-        XCTAssertTrue(s.tap(.up).has { $0 == .placed(count: 3) })
+        XCTAssertTrue(s.tap(.a).has { $0 == .placed(count: 3) })
         XCTAssertTrue(s.pip.carried.isEmpty)
         XCTAssertEqual(s.board.notation, [". . B", ". . T", ". . E"])
     }
@@ -125,7 +125,7 @@ final class PipTests: XCTestCase {
 
     func testPlaceBlockedWhenFrontOccupied() {
         var s = sandbox([". . . . E"], pip: 3, facing: .right, carrying: [.mite(.tide, id: 90)])
-        let ev = s.tap(.up)
+        let ev = s.tap(.a)
         XCTAssertTrue(ev.has { $0 == .bump })
         XCTAssertEqual(s.pip.carried.count, 1)
     }
@@ -264,10 +264,34 @@ final class PipTests: XCTestCase {
             return false
         })
         var t = sandbox([". . . . E"], pip: 3, facing: .right, carrying: [.mite(.tide, id: 90)])
-        let ev2 = t.tap(.up)
+        let ev2 = t.tap(.a)
         XCTAssertTrue(ev2.has {
             if case let .actionRejected(action, reason) = $0 { return action == .place && reason.contains("Down") }
             return false
         })
+    }
+
+    // MARK: Classic button mapping while carrying
+
+    func testUpAndABAlsoDropTheLoadUnderPip() {
+        for press in [Buttons.up, [.a, .b]] {
+            var s = sandbox([], pip: 3, carrying: [.mite(.ember, id: 90), .mite(.tide, id: 91)])
+            XCTAssertTrue(s.tap(press).has { $0 == .placedBelow(count: 2) })
+            XCTAssertEqual(s.pip.cell, Cell(3, 2))
+            XCTAssertEqual(s.board.height(3), 2)
+        }
+    }
+
+    func testBPutsDownOnlyTheBottomPiece() {
+        var s = sandbox([], pip: 3, facing: .right,
+                        carrying: [.mite(.ember, id: 90), .mite(.tide, id: 91), .mite(.bloom, id: 92)])
+        s.tap(.b)
+        XCTAssertEqual(s.board.notation, [". . . . E"])
+        XCTAssertEqual(s.pip.carried.map(\.id), [91, 92])
+    }
+
+    func testDownPlusBKicksToo() {
+        var s = sandbox([". T"], pip: 0, facing: .right)
+        XCTAssertTrue(s.tap(.b, held: .down).has { if case .kicked = $0 { return true } else { return false } })
     }
 }

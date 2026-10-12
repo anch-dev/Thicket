@@ -43,10 +43,12 @@ public enum PipAction: Int, Codable, Hashable, CaseIterable {
     case liftStack
     /// B: pull out only the piece in front; pieces above it drop.
     case pull
-    /// Down + A: kick the piece in front sideways.
+    /// Down + A or Down + B: kick the piece in front sideways.
     case kick
-    /// While carrying: A, B, A+B or Up – put the load down in front.
+    /// While carrying, A: put the whole load down in front.
     case place
-    /// While carrying: Down – put the load down under Pip and stand on it.
+    /// While carrying, B: put only the bottom piece down in front.
+    case placeOne
+    /// While carrying, Up, Down or A+B: drop the load where Pip stands and hop on top.
     case placeBelow
 }
