@@ -42,8 +42,7 @@ final class GameRunner: ObservableObject, Identifiable {
 /// Hosts the SpriteKit view and the touch controls, and runs the fixed-step loop.
 final class GameViewController: UIViewController {
     let runner: GameRunner
-    private let skView = SKView()
-    private let scene = GameScene(size: CGSize(width: 800, height: 400))
+    private var renderer: GameRenderer!
     private let touchView = TouchControlsView()
     private let hardware = HardwareInput()
     private var displayLink: CADisplayLink?
@@ -52,6 +51,8 @@ final class GameViewController: UIViewController {
     private var mergers = [InputMerger(), InputMerger()]
     private var pauseWasHeld = false
     private var lastHardwareActivity: CFTimeInterval = -100
+    private var lastLoggedFrame = InputFrame.none
+    private let log = GameLog.shared
 
     private static let tick = 1.0 / Double(Rules.ticksPerSecond)
 
@@ -72,16 +73,17 @@ final class GameViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        skView.ignoresSiblingOrder = false
-        skView.isMultipleTouchEnabled = true
-        skView.preferredFramesPerSecond = 60
-        view.addSubview(skView)
-        view.addSubview(touchView)
-
         let players = runner.isVersus ? 2 : 1
         let st = runner.session.state
-        scene.configure(columns: st.board.width, rows: st.board.rows, players: players)
-        skView.presentScene(scene)
+        let mode = app?.settings.graphics ?? .threeD
+        switch mode {
+        case .threeD: renderer = Renderer3D(columns: st.board.width, rows: st.board.rows, players: players)
+        case .pixel: renderer = PixelRenderer(columns: st.board.width, rows: st.board.rows, players: players)
+        }
+        view.addSubview(renderer.view)
+        view.addSubview(touchView)
+        log.info("game", "start \(runner.session.title) kind=\(runner.session.kind) renderer=\(renderer.name) players=\(players)")
+        log.info("game", "initial state\n" + LogFormat.state(st))
 
         touchView.isHidden = runner.isVersus
         touchView.onPress = { [weak self] id in
@@ -93,8 +95,9 @@ final class GameViewController: UIViewController {
         hardware.onActivity = { [weak self] in
             self?.lastHardwareActivity = CACurrentMediaTime()
         }
+        hardware.log = log
         applySettings()
-        scene.render(runner.session)
+        renderer.render(runner.session)
     }
 
     func applySettings() {
@@ -121,10 +124,11 @@ final class GameViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        skView.frame = view.bounds
+        renderer.view.frame = view.bounds
         touchView.frame = view.bounds
-        scene.size = view.bounds.size
-        scene.layout(safeInsets: view.safeAreaInsets, screenScale: view.window?.screen.scale ?? traitCollection.displayScale)
+        let scale = view.window?.screen.scale ?? traitCollection.displayScale
+        renderer.layout(size: view.bounds.size, safeInsets: view.safeAreaInsets, screenScale: scale)
+        log.info("ui", "layout \(Int(view.bounds.width))x\(Int(view.bounds.height))pt @\(scale)x insets=\(view.safeAreaInsets)")
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -162,6 +166,7 @@ final class GameViewController: UIViewController {
     }
 
     func togglePause() {
+        log.info("game", runner.paused ? "resume" : "pause")
         if runner.paused {
             runner.paused = false
         } else {
@@ -190,8 +195,13 @@ final class GameViewController: UIViewController {
 
         if runner.paused || runner.outcome != .none {
             accumulator = 0
-            scene.render(runner.session)
+            renderer.render(runner.session)
             return
+        }
+
+        if frames[0] != lastLoggedFrame && log.verbose {
+            log.debug("input", "P1 " + LogFormat.frame(frames[0]) + (touch.held.isEmpty && touch.pressed.isEmpty ? "" : " (touch)"))
+            lastLoggedFrame = frames[0]
         }
 
         accumulator += dt
@@ -201,7 +211,7 @@ final class GameViewController: UIViewController {
             let inputs = ticked ? frames.map { InputFrame(held: $0.held) } : frames
             let events = runner.step(inputs)
             ticked = true
-            scene.apply(events, session: runner.session)
+            renderer.apply(events, session: runner.session)
             handleSound(events)
             if runner.outcome != .none { break }
         }
@@ -209,10 +219,31 @@ final class GameViewController: UIViewController {
             // No tick this display frame: keep the presses for the next one.
             for i in 0..<2 { mergers[i].carryOver(frames[i]) }
         }
-        scene.render(runner.session)
+        renderer.render(runner.session)
+    }
+
+    private func logEvents(_ events: [[GameEvent]]) {
+        let session = runner.session
+        for (player, list) in events.enumerated() {
+            for e in list {
+                switch e {
+                case .actionRejected:
+                    // Always logged: explains "why didn't Pip do that?".
+                    log.info("pip", "P\(player + 1) " + LogFormat.event(e) + " | " + LogFormat.pip(session.versus?.players[player].pip ?? session.state.pip))
+                case .gameOver, .roundCleared, .chain, .canopySlam, .phaseChanged, .starseedBurst:
+                    log.info("game", "P\(player + 1) " + LogFormat.event(e))
+                    if case .gameOver = e {
+                        log.info("game", "state at game over\n" + LogFormat.state(session.versus?.players[player] ?? session.state))
+                    }
+                default:
+                    if log.verbose { log.debug("event", "P\(player + 1) t=\(session.state.tick) " + LogFormat.event(e)) }
+                }
+            }
+        }
     }
 
     private func handleSound(_ events: [[GameEvent]]) {
+        logEvents(events)
         guard let app else { return }
         let audio = app.audio
         for (player, list) in events.enumerated() {
@@ -253,7 +284,7 @@ final class GameViewController: UIViewController {
                         audio.play(.roundClear)
                         app.haptics.success()
                     }
-                case .pipLanded, .attack, .chain:
+                case .placedBelow, .actionRejected, .pipLanded, .attack, .chain:
                     break
                 }
             }

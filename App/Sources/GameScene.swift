@@ -38,9 +38,13 @@ final class BoardView: SKNode {
     private var actorTarget: CGFloat = 0
     private var lastSpawnTick = -999
 
-    init(columns: Int, rows: Int) {
+    /// Overlay mode (3D graphics): draw only text effects; the 3D scene draws the rest.
+    let overlay: Bool
+
+    init(columns: Int, rows: Int, overlay: Bool = false) {
         self.columns = columns
         self.rows = rows
+        self.overlay = overlay
         canopyY = CGFloat(rows) * cell
         meterFill = rect(color(0xFFD84A), 0, 3)
         gloomTint = rect(color(0x2A1840), CGFloat(columns) * cell, CGFloat(rows) * cell, z: 25)
@@ -52,6 +56,11 @@ final class BoardView: SKNode {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     private func build() {
+        if overlay {
+            effects.zPosition = 50
+            addChild(effects)
+            return
+        }
         let w = fieldWidth, h = fieldHeight
         let tex = TextureCache.shared
         // Forest backdrop.
@@ -136,8 +145,8 @@ final class BoardView: SKNode {
             n.texture = TextureCache.shared.sprite(PixelArt.spriteName(for: p), color: p.color)
             n.size = CGSize(width: cell, height: cell)
             n.removeAllChildren()
-            if p.kind == .mite, let overlay = PixelArt.overlayName(for: p.mite) {
-                let o = SKSpriteNode(texture: TextureCache.shared.sprite(overlay))
+            if p.kind == .mite, let overlayName = PixelArt.overlayName(for: p.mite) {
+                let o = SKSpriteNode(texture: TextureCache.shared.sprite(overlayName))
                 o.anchorPoint = .zero
                 o.zPosition = 1
                 // A Shifter that has already been hit loses its horns' left half: show it dimmed.
@@ -149,6 +158,7 @@ final class BoardView: SKNode {
     }
 
     func render(_ s: GameState) {
+        if overlay { return }
         var seen = Set<Int>()
         let tick = s.tick
         func show(_ p: Piece, _ x: CGFloat, _ y: CGFloat, z: CGFloat = 10) {
@@ -239,8 +249,10 @@ final class BoardView: SKNode {
         for e in events {
             switch e {
             case let .cleared(cells, pieces, _, score):
-                for (cellPos, p) in zip(cells, pieces) {
-                    pop(p, at: cellPos)
+                if !overlay {
+                    for (cellPos, p) in zip(cells, pieces) {
+                        pop(p, at: cellPos)
+                    }
                 }
                 if let first = cells.first, score > 0 {
                     floatText("+\(score)", at: CGPoint(x: CGFloat(first.col) * cell + 8, y: CGFloat(first.row) * cell + 12),
@@ -249,10 +261,12 @@ final class BoardView: SKNode {
             case let .chain(level):
                 banner("CHAIN X\(level)", color: 0xFFD84AFF)
             case let .hit(c):
-                flash(at: c, color: 0xFFFFFF)
+                if !overlay { flash(at: c, color: 0xFFFFFF) }
             case let .starseedCreated(c, _):
-                flash(at: c, color: 0xFFD84A)
+                if !overlay { flash(at: c, color: 0xFFD84A) }
                 banner("STARSEED!", color: 0xA8DBFFFF)
+            case .starseedBurst where overlay:
+                break
             case let .starseedBurst(pc):
                 let main = SpriteData.pieceColors[PixelArt.colorName(pc)]?["1"] ?? 0xFFFFFFFF
                 let f = rect(color(main >> 8), fieldWidth, fieldHeight, z: 45)
@@ -338,9 +352,13 @@ final class GameScene: SKScene {
 
     static let panelWidth: CGFloat = 40
 
-    override init(size: CGSize) {
+    /// HUD-only scene drawn over the 3D view.
+    let overlay: Bool
+
+    init(size: CGSize, overlay: Bool = false) {
+        self.overlay = overlay
         super.init(size: size)
-        backgroundColor = color(0x0C140F)
+        backgroundColor = overlay ? .clear : color(0x0C140F)
         scaleMode = .resizeFill
         anchorPoint = .zero
         addChild(world)
@@ -352,7 +370,7 @@ final class GameScene: SKScene {
     func configure(columns: Int, rows: Int, players: Int) {
         self.players = players
         boards.forEach { $0.removeFromParent() }
-        boards = (0..<players).map { _ in BoardView(columns: columns, rows: rows) }
+        boards = (0..<players).map { _ in BoardView(columns: columns, rows: rows, overlay: overlay) }
         let boardBox = CGFloat(columns) * cell + 8
         let fieldH = CGFloat(rows) * cell
         if players == 1 {
@@ -380,6 +398,18 @@ final class GameScene: SKScene {
         let y = safe.midY - artSize.height * s / 2
         basePosition = CGPoint(x: (x * screenScale).rounded() / screenScale, y: (y * screenScale).rounded() / screenScale)
         world.position = basePosition
+    }
+
+    /// Where each playfield is drawn, in UIKit view coordinates (origin top-left).
+    /// The 3D renderer frames its camera on these so HUD and 3D board line up.
+    func fieldRects() -> [CGRect] {
+        let s = world.xScale
+        return boards.map { b in
+            let x = basePosition.x + b.position.x * s
+            let y = basePosition.y + b.position.y * s
+            let w = b.fieldWidth * s, h = b.fieldHeight * s
+            return CGRect(x: x, y: size.height - (y + h), width: w, height: h)
+        }
     }
 
     private func setHUD(_ key: String, _ text: String, x: CGFloat, y: CGFloat, color rgb: UInt32 = 0xFFFFFFFF) {

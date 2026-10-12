@@ -118,6 +118,7 @@ final class AudioEngine {
         })
         observers.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification,
                                             object: nil, queue: .main) { [weak self] _ in
+            GameLog.shared.warning("audio", "media services were reset; rebuilding engine")
             self?.teardown()
             self?.startIfNeeded()
         })
@@ -161,7 +162,9 @@ final class AudioEngine {
         }
         do {
             try engine?.start()
+            GameLog.shared.info("audio", "engine started (route: \(session.currentRoute.outputs.map(\.portType.rawValue).joined(separator: ",")), other audio playing: \(session.isOtherAudioPlaying))")
         } catch {
+            GameLog.shared.error("audio", "engine failed to start: \(error)")
             teardown()
         }
     }
@@ -175,6 +178,7 @@ final class AudioEngine {
 
     /// App going to the background: stop producing sound entirely.
     func suspend() {
+        GameLog.shared.info("audio", "suspend")
         suspended = true
         engine?.pause()
     }
@@ -189,8 +193,10 @@ final class AudioEngine {
               let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
         switch type {
         case .began:
+            GameLog.shared.info("audio", "interruption began")
             engine?.pause()
         case .ended:
+            GameLog.shared.info("audio", "interruption ended")
             startIfNeeded()
         @unknown default:
             break

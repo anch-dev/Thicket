@@ -70,6 +70,8 @@ targets:
           - ProfileName: ExtendedGamepad
           - ProfileName: MicroGamepad
         ITSAppUsesNonExemptEncryption: false
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.anch.thicket

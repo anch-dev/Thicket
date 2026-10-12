@@ -63,6 +63,7 @@ final class TouchControlsView: UIView {
 
     /// Releases every control (interruptions, pause, backgrounding).
     func releaseAll() {
+        if tracker.touchCount > 0 { GameLog.shared.debug("touch", "release all (\(tracker.touchCount) touches)") }
         tracker.reset()
         refresh()
     }
@@ -175,7 +176,10 @@ final class TouchControlsView: UIView {
     }
 
     private func emitFeedback() {
-        for id in tracker.consumeFeedback() { onPress?(id) }
+        for id in tracker.consumeFeedback() {
+            GameLog.shared.debug("touch", "press \(id.rawValue) held=\(LogFormat.buttons(tracker.held))")
+            onPress?(id)
+        }
         refresh()
     }
 
@@ -223,6 +227,7 @@ final class TouchControlsView: UIView {
         }
         for t in touches { tracker.ended(key(t)) }
         syncLiveTouches(event)
+        GameLog.shared.debug("touch", "release -> held=\(LogFormat.buttons(tracker.held)) touches=\(tracker.touchCount)")
         refresh()
     }
 }

@@ -6,7 +6,7 @@ import UIKit
 /// App-wide state: navigation, settings, save data, audio, the running game.
 final class AppModel: ObservableObject {
     enum Screen: Equatable {
-        case title, rounds, trials, lessons, settings, controls, game
+        case title, rounds, trials, lessons, settings, controls, log, game
     }
 
     @Published var screen: Screen = .title
@@ -15,6 +15,11 @@ final class AppModel: ObservableObject {
             persistence.saveSettings(settings)
             audio.apply(settings)
             haptics.enabled = settings.haptics
+            GameLog.shared.verbose = settings.verboseLogging
+            if oldValue.graphics != settings.graphics || oldValue.verboseLogging != settings.verboseLogging
+                || oldValue.muted != settings.muted {
+                GameLog.shared.info("settings", "graphics=\(settings.graphics) verbose=\(settings.verboseLogging) muted=\(settings.muted)")
+            }
         }
     }
 
@@ -31,9 +36,13 @@ final class AppModel: ObservableObject {
 
     init(persistence: Persistence = AppModel.makePersistence()) {
         self.persistence = persistence
-        settings = persistence.loadSettings()
+        let loadedSettings = persistence.loadSettings()
+        AppLogging.setUp(verbose: loadedSettings.verboseLogging)
+        settings = loadedSettings
         save = persistence.loadSave()
         suspended = persistence.loadSuspended()
+        GameLog.shared.info("app", "loaded save: unlocked round \(save.campaign.unlockedRound), lessons \(save.lessonsCompleted.count), suspended game: \(suspended.map { "\($0.kind)" } ?? "none")")
+        GameLog.shared.info("app", "settings: graphics=\(settings.graphics) music=\(settings.musicVolume) sfx=\(settings.sfxVolume) muted=\(settings.muted) haptics=\(settings.haptics)")
         isPad = UIDevice.current.userInterfaceIdiom == .pad
         let bounds = UIScreen.main.bounds
         deviceKey = ControlLayout.deviceKey(idiom: isPad ? "pad" : "phone",
@@ -43,6 +52,8 @@ final class AppModel: ObservableObject {
         audio.play(song: SongLibrary.menu)
         // Used by CI screenshots: `-autostart round|lesson|versus`.
         let args = ProcessInfo.processInfo.arguments
+        if args.contains("-pixel") { settings.graphics = .pixel }
+        if args.contains("-3d") { settings.graphics = .threeD }
         if let i = args.firstIndex(of: "-autostart"), i + 1 < args.count {
             switch args[i + 1] {
             case "lesson": start(.lesson(id: "climb"))
@@ -69,7 +80,9 @@ final class AppModel: ObservableObject {
     func start(_ kind: SessionKind) {
         persistence.clearSuspended()
         suspended = nil
-        let session = SessionModel(kind: kind, seed: UInt64.random(in: 1...UInt64.max))
+        let seed = UInt64.random(in: 1...UInt64.max)
+        GameLog.shared.info("app", "start \(kind) seed=\(seed)")
+        let session = SessionModel(kind: kind, seed: seed)
         runner = GameRunner(session: session, app: self)
         screen = .game
         audio.play(.menuSelect)
@@ -79,6 +92,7 @@ final class AppModel: ObservableObject {
 
     func resumeSuspended() {
         guard let s = suspended else { return }
+        GameLog.shared.info("app", "resume suspended \(s.kind) saved \(s.savedAt)")
         let session = SessionModel(resuming: s)
         let r = GameRunner(session: session, app: self)
         r.paused = true
@@ -113,6 +127,7 @@ final class AppModel: ObservableObject {
     }
 
     func quitToMenu() {
+        GameLog.shared.info("app", "quit to menu")
         runner = nil
         persistence.clearSuspended()
         screen = .title
@@ -126,6 +141,7 @@ final class AppModel: ObservableObject {
 
     /// Called once when a session finishes. Returns true for a new record.
     func recordOutcome(_ session: inout SessionModel) -> Bool {
+        GameLog.shared.info("game", "outcome \(session.outcome) score=\(session.state.score) maxChain=\(session.state.maxChain) ticks=\(session.state.tick)")
         var s = save
         let isRecord = session.record(into: &s)
         save = s
@@ -147,6 +163,7 @@ final class AppModel: ObservableObject {
     // MARK: Lifecycle
 
     func scenePhaseChanged(_ phase: ScenePhase) {
+        GameLog.shared.info("app", "scene phase \(phase)")
         switch phase {
         case .active:
             audio.resume()
@@ -158,6 +175,7 @@ final class AppModel: ObservableObject {
             gameController?.releaseInputs()
             saveSnapshot()
             audio.suspend()
+            AppLogging.flush(force: true)
         @unknown default:
             break
         }
@@ -167,5 +185,6 @@ final class AppModel: ObservableObject {
     func saveSnapshot() {
         guard let r = runner, !r.session.isFinished else { return }
         persistence.saveSuspended(r.session.snapshot)
+        GameLog.shared.info("app", "saved snapshot of \(r.session.kind) at tick \(r.session.state.tick)")
     }
 }

@@ -98,6 +98,7 @@ struct RootView: View {
             case .lessons: LessonsView()
             case .settings: SettingsView()
             case .controls: ControlsEditorView()
+            case .log: LogView()
             case .game:
                 if let runner = model.runner {
                     GameScreen(runner: runner).id(runner.id)
@@ -281,6 +282,14 @@ struct SettingsView: View {
                             if !done { model.audio.play(.clear) }
                         })
                     }
+                    HStack {
+                        Text("GRAPHICS").frame(width: 90, alignment: .leading)
+                        Picker("Graphics", selection: $model.settings.graphics) {
+                            Text("3D").tag(GraphicsMode.threeD)
+                            Text("PIXEL 2D").tag(GraphicsMode.pixel)
+                        }
+                        .pickerStyle(.segmented)
+                    }
                     Toggle("MUTE ALL", isOn: $model.settings.muted)
                     Toggle("HAPTICS", isOn: $model.settings.haptics)
                     Toggle("ALWAYS SHOW TOUCH CONTROLS", isOn: $model.settings.alwaysShowTouchControls)
@@ -288,6 +297,9 @@ struct SettingsView: View {
                         .font(pixelFont(11)).foregroundColor(.white.opacity(0.5))
                     Button("EDIT TOUCH CONTROLS") { model.go(.controls) }
                         .buttonStyle(MenuButtonStyle(tint: Palette.tide))
+                    Toggle("VERBOSE LOGGING", isOn: $model.settings.verboseLogging)
+                    Button("VIEW / SHARE LOG") { model.go(.log) }
+                        .buttonStyle(MenuButtonStyle(tint: .gray))
                     Button("RESET PROGRESS") { confirmReset = true }
                         .buttonStyle(MenuButtonStyle(tint: .red))
                     Text(controlsHelp)
@@ -308,8 +320,66 @@ struct SettingsView: View {
         """
         CONTROLLER: D-pad/stick move - A lift stack - B pull one - X/Y = A+B - Menu pauses.
         KEYBOARD: Arrows/WASD move - X/K = A - Z/J = B - C/L/Space = A+B - Return start - Esc/P pause.
-        Down+A kicks. While carrying, Up, A, B or A+B puts the load down.
+        Down+A kicks. Walk into a stack to climb it. While carrying, Up, A, B or A+B puts the load down in front; Down puts it under your feet.
         """
+    }
+}
+
+// MARK: - Log
+
+struct LogView: View {
+    @EnvironmentObject var model: AppModel
+    @State private var lines: [String] = []
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Button("< BACK") { model.go(.settings) }
+                    .font(pixelFont(15))
+                    .foregroundColor(Palette.leaf)
+                Spacer()
+                Text("\(lines.count) LINES\(model.settings.verboseLogging ? " - VERBOSE" : "")")
+                    .font(pixelFont(12)).foregroundColor(.white.opacity(0.6))
+                Spacer()
+                Button("REFRESH") { reload() }.font(pixelFont(13))
+                Button("CLEAR") {
+                    GameLog.shared.clear()
+                    reload()
+                }
+                .font(pixelFont(13))
+                ShareLink(item: AppLogging.fileURL) {
+                    Text("SHARE").font(pixelFont(13))
+                }
+                .simultaneousGesture(TapGesture().onEnded { AppLogging.flush(force: true) })
+            }
+            .foregroundColor(Palette.leaf)
+            .padding(.horizontal)
+            .padding(.top, 8)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                            Text(line)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(line.contains(" ERR ") || line.contains(" WRN ") ? .orange : .white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .id(i)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .textSelection(.enabled)
+                }
+                .onAppear {
+                    reload()
+                    if !lines.isEmpty { proxy.scrollTo(lines.count - 1, anchor: .bottom) }
+                }
+            }
+        }
+    }
+
+    private func reload() {
+        AppLogging.flush(force: true)
+        lines = Array(GameLog.shared.snapshot.suffix(1500))
     }
 }
 

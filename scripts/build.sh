@@ -70,11 +70,16 @@ if [[ "$WHAT" == "screens" ]]; then
   xcrun simctl launch "$SIM" dev.anch.thicket
   sleep 6
   xcrun simctl io "$SIM" screenshot build/screens/title.png
-  for mode in round lesson; do
+  shot() { # name, launch args...
+    local name="$1"; shift
     xcrun simctl terminate "$SIM" dev.anch.thicket || true
-    xcrun simctl launch "$SIM" dev.anch.thicket -autostart "$mode"
-    sleep 9
-    xcrun simctl io "$SIM" screenshot "build/screens/$mode.png"
-  done
+    xcrun simctl launch "$SIM" dev.anch.thicket "$@"
+    sleep 10
+    xcrun simctl io "$SIM" screenshot "build/screens/$name.png"
+  }
+  shot round3d -autostart round -3d
+  shot lesson3d -autostart lesson -3d
+  shot round2d -autostart round -pixel
+  shot versus3d -autostart versus -3d
   ls -la build/screens
 fi

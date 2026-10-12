@@ -15,14 +15,18 @@ final class HardwareInput {
     private var observers: [NSObjectProtocol] = []
     /// Called on any controller press (used to hide touch controls).
     var onActivity: (() -> Void)?
+    var log: GameLog? {
+        didSet { logDevices("devices") }
+    }
 
     init() {
         let center = NotificationCenter.default
         for name in [Notification.Name.GCControllerDidConnect, .GCControllerDidDisconnect,
                      .GCKeyboardDidConnect, .GCKeyboardDidDisconnect] {
-            observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+            observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
                 self?.installHandlers()
                 self?.reset()
+                self?.logDevices(note.name.rawValue)
             })
         }
         installHandlers()
@@ -37,6 +41,11 @@ final class HardwareInput {
     }
 
     var hasController: Bool { !controllers.isEmpty }
+
+    private func logDevices(_ reason: String) {
+        let pads = controllers.map { "\($0.vendorName ?? "controller") (\($0.extendedGamepad != nil ? "extended" : "micro"))" }
+        log?.info("input", "\(reason): controllers=[\(pads.joined(separator: ", "))] keyboard=\(hasKeyboard)")
+    }
     var hasKeyboard: Bool { GCKeyboard.coalesced != nil }
 
     func reset() {
