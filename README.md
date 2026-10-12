@@ -103,8 +103,19 @@ CI (`.github/workflows/ci.yml`) runs the logic tests on Linux. It also runs the 
 
 ## Install on a device (sideloading)
 
-- **With Xcode (simplest):** open the project and select the **Thicket** target. Under *Signing & Capabilities*, choose your Apple ID team; a free account works. Plug in the device and press Run. Builds signed with a free account expire after 7 days.
-- **From the unsigned .ipa:** `build/Thicket-unsigned.ipa`, or the CI artifact, is **not signed**. Re-sign it before installing. Options include AltStore or SideStore, Sideloadly, or `codesign` with your own provisioning profile. The bundle id is `dev.anch.thicket`; change `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml` if your team requires a different one.
+**Get the .ipa:** the **Build IPA** workflow (`.github/workflows/ipa.yml`) builds an unsigned `Thicket.ipa` and attaches it to a GitHub Release:
+
+- Latest build: https://github.com/anch-dev/Thicket/releases/download/latest/Thicket.ipa
+- It rebuilds whenever app code is pushed. To build on demand, go to *Actions → Build IPA → Run workflow*. Pushing a `v*` tag (e.g. `v1.0`) creates a versioned release.
+
+**Install it:** the .ipa is **unsigned**. Install it with a tool that signs it using your Apple ID:
+
+- **AltStore / SideStore**: open the .ipa in the app (or use *My Apps → +*).
+- **Sideloadly**: drag the .ipa in, enter your Apple ID, then click Start.
+
+With a free Apple ID, the app expires after 7 days; refresh or reinstall it then. You may need to enable *Developer Mode* (Settings → Privacy & Security) and trust the profile (Settings → General → VPN & Device Management).
+
+**Alternatively, build with Xcode:** open the project, choose your team under *Signing & Capabilities* on the **Thicket** target, and Run on a connected device. If your team requires it, change `PRODUCT_BUNDLE_IDENTIFIER` (`dev.anch.thicket`) in `project.yml`.
 
 ## Saving and lifecycle
 

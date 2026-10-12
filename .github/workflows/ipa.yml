@@ -1,0 +1,82 @@
+name: Build IPA
+
+# Builds an unsigned Thicket.ipa for sideloading (AltStore, SideStore, Sideloadly, ...).
+# The sideloading tool re-signs it with your Apple ID when installing.
+#
+# Run it from the Actions tab ("Run workflow"), or push a tag like v1.0.
+# The .ipa is attached to a GitHub Release:
+#   - manual runs / branch pushes -> the rolling "latest" pre-release
+#   - v* tags                      -> a release named after the tag
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/thicket-game, main, master]
+    tags: ['v*']
+    paths:
+      - 'App/**'
+      - 'Sources/**'
+      - 'project.yml'
+      - '.github/workflows/ipa.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app 2>/dev/null || true
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build unsigned arm64 IPA
+        run: |
+          xcodegen generate --quiet
+          xcodebuild -project Thicket.xcodeproj -scheme Thicket -configuration Release \
+            -sdk iphoneos -destination "generic/platform=iOS" -derivedDataPath build/DerivedData \
+            ARCHS=arm64 CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build -quiet
+          APP=build/DerivedData/Build/Products/Release-iphoneos/Thicket.app
+          rm -rf build/Payload && mkdir -p build/Payload
+          cp -R "$APP" build/Payload/
+          (cd build && zip -qry Thicket.ipa Payload)
+
+      - name: Check IPA contents
+        run: |
+          unzip -l build/Thicket.ipa | grep -E "Thicket.app/(Thicket|Info.plist)$|Frameworks/Thicket(Core|Kit).framework/Thicket(Core|Kit)$"
+          lipo -info build/Payload/Thicket.app/Thicket
+          plutil -p build/Payload/Thicket.app/Info.plist | grep -E "CFBundleIdentifier|CFBundleShortVersionString|MinimumOSVersion"
+          ls -lh build/Thicket.ipa
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Thicket-ipa
+          path: build/Thicket.ipa
+          compression-level: 0
+
+      - name: Publish to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            gh release create "$TAG" build/Thicket.ipa --repo "$GITHUB_REPOSITORY" \
+              --title "Thicket $TAG" --notes "Unsigned build for sideloading. Re-sign with AltStore, SideStore or Sideloadly."
+          else
+            gh release delete latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+            gh release create latest build/Thicket.ipa --repo "$GITHUB_REPOSITORY" --prerelease \
+              --target "$GITHUB_SHA" --title "Thicket (latest build)" \
+              --notes "Unsigned build of ${GITHUB_SHA::7} for sideloading. Re-sign with AltStore, SideStore or Sideloadly."
+          fi
