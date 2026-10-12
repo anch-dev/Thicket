@@ -283,7 +283,7 @@ struct Oscillator {
 
 /// Mixes the current song and any playing effects. Thread-safe: commands come
 /// from the main thread, `render` is called from the audio thread.
-public final class ChipMixer {
+public final class ChipMixer: @unchecked Sendable {
     public let sampleRate: Double
     private let lock = NSLock()
     private var effects: [SoundEffect: [Float]] = [:]

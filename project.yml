@@ -1,0 +1,107 @@
+name: Thicket
+options:
+  bundleIdPrefix: dev.anch
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+targets:
+  ThicketCore:
+    type: framework
+    platform: iOS
+    sources: [Sources/ThicketCore]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.anch.thicket.core
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+        ENABLE_TESTABILITY: YES
+  ThicketKit:
+    type: framework
+    platform: iOS
+    sources: [Sources/ThicketKit]
+    dependencies:
+      - target: ThicketCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.anch.thicket.kit
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+        ENABLE_TESTABILITY: YES
+  Thicket:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - target: ThicketCore
+      - target: ThicketKit
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Thicket
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSupportsIndirectInputEvents: true
+        GCSupportsControllerUserInteraction: true
+        GCSupportedGameControllers:
+          - ProfileName: ExtendedGamepad
+          - ProfileName: MicroGamepad
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.anch.thicket
+        PRODUCT_NAME: Thicket
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: NO
+  ThicketTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/ThicketCoreTests
+      - Tests/ThicketKitTests
+      - Tests/ThicketAppTests
+    dependencies:
+      - target: Thicket
+      - target: ThicketCore
+        embed: false
+      - target: ThicketKit
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.anch.thicket.tests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Thicket:
+    build:
+      targets:
+        Thicket: all
+        ThicketTests: [test]
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - ThicketTests
