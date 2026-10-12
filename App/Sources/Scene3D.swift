@@ -617,6 +617,9 @@ final class World3D {
         cameraBase = SCNVector3(centerWorldX - dx, centerWorldY + dy + distance * tan(-pitch), distance)
         cameraNode.position = cameraBase
         cameraNode.eulerAngles = SCNVector3(pitch, 0, 0)
+        // Fog only on the distant forest, never on the playfield.
+        scene.fogStartDistance = CGFloat(distance + 4)
+        scene.fogEndDistance = CGFloat(distance + 26)
     }
 
     func render(_ session: SessionModel) {
