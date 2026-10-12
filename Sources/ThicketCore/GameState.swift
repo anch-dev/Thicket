@@ -127,13 +127,17 @@ public struct GameState: Codable, Equatable {
 
     func decode(_ input: InputFrame) -> PipAction? {
         let p = input.pressed
-        if p.contains(.a) {
-            if pip.isCarrying { return .place }
-            return input.held.contains(.down) || p.contains(.down) ? .kick : .liftStack
+        let down = input.held.contains(.down) || p.contains(.down)
+        if pip.isCarrying {
+            // Down (alone or with A/B) puts the load under Pip; A, B, A+B or Up put it in front.
+            if p.contains(.down) || (down && !p.intersection([.a, .b]).isEmpty) { return .placeBelow }
+            if !p.intersection([.a, .b, .up]).isEmpty { return .place }
+        } else {
+            if p.contains(.a) { return down ? .kick : .liftStack }
+            if p.contains(.b) { return .pull }
+            if p.contains(.up) { return .climb }
+            if p.contains(.down) { return pip.clinging ? .climbDown : nil }
         }
-        if p.contains(.b) { return pip.isCarrying ? .place : .pull }
-        if p.contains(.up) { return pip.isCarrying ? .place : .climb }
-        if p.contains(.down) { return pip.clinging ? .climbDown : nil }
         let l = p.contains(.left), r = p.contains(.right)
         if l != r { return l ? .walkLeft : .walkRight }
         return nil
@@ -206,93 +210,105 @@ public struct GameState: Codable, Equatable {
     }
 
     /// Attempts an action; returns false (and changes nothing) if it is not legal.
+    /// A rejected action emits `.actionRejected` with the reason (useful for logs).
     @discardableResult
     public mutating func perform(_ action: PipAction) -> Bool {
-        let ok: Bool
+        let failure: String?
         switch action {
-        case .walkLeft: ok = move(.left)
-        case .walkRight: ok = move(.right)
-        case .climb: ok = climb()
-        case .climbDown: ok = climbDown()
-        case .liftStack: ok = lift(whole: true)
-        case .pull: ok = lift(whole: false)
-        case .kick: ok = kick()
-        case .place: ok = place()
+        case .walkLeft: failure = move(.left)
+        case .walkRight: failure = move(.right)
+        case .climb: failure = climb()
+        case .climbDown: failure = climbDown()
+        case .liftStack: failure = lift(whole: true)
+        case .pull: failure = lift(whole: false)
+        case .kick: failure = kick()
+        case .place: failure = place()
+        case .placeBelow: failure = placeBelow()
         }
-        if !ok, [.liftStack, .pull, .kick, .place].contains(action) {
+        guard let reason = failure else { return true }
+        events.append(.actionRejected(action: action, reason: reason))
+        if [.liftStack, .pull, .kick, .place, .placeBelow].contains(action) {
             events.append(.bump)
         }
-        return ok
+        return false
     }
 
-    mutating func move(_ d: Facing) -> Bool {
+    /// Cells Pip plus his load would occupy standing at (c, r).
+    func roomForPip(_ c: Int, _ r: Int) -> Bool {
+        isFree(c, r, height: pip.carried.count + 1)
+    }
+
+    /// Walking. Walking into a stack climbs it: a 1-high step is stepped onto,
+    /// a taller one is climbed one cell up its side (keep holding to go higher).
+    mutating func move(_ d: Facing) -> String? {
         let from = pip.cell
         if pip.clinging {
             if d == pip.facing { return climb() }
             pip.facing = d
             pip.clinging = false
             events.append(.pipTurned)
-            return true
+            return nil
         }
         if pip.facing != d {
             pip.facing = d
             pip.begin(.turn, ticks: 2, from: from)
             events.append(.pipTurned)
-            return true
+            return nil
         }
         let t = pip.column + d.rawValue
-        guard board.contains(column: t) else { return false }
-        let n = pip.carried.count
-        if isFree(t, pip.row, height: n + 1) {
+        guard board.contains(column: t) else { return "edge of the field" }
+        if roomForPip(t, pip.row) {
             pip.column = t
             pip.begin(.walk, ticks: Rules.pipWalkTicks, from: from)
             events.append(.pipWalked)
-            return true
+            return nil
         }
-        // Step up a single-cell ledge (not while carrying).
-        if !pip.isCarrying, board.piece(t, pip.row) != nil, isFree(t, pip.row + 1),
-           isFree(pip.column, pip.row + 1) {
-            pip.column = t
-            pip.row += 1
-            pip.begin(.climb, ticks: Rules.pipClimbTicks, from: from)
-            events.append(.pipClimbed)
-            return true
+        if board.piece(t, pip.row) != nil {
+            return climb()
         }
-        return false
+        return "a falling piece is in the way"
     }
 
-    mutating func climb() -> Bool {
-        guard !pip.isCarrying else { return false }
+    /// Up (not carrying), or walking into a stack: climb the stack in front one
+    /// cell, or clamber onto its top. Works while carrying if the load fits.
+    mutating func climb() -> String? {
         let f = pip.column + pip.facing.rawValue
         let r = pip.row
-        guard board.piece(f, r) != nil, r + 1 < board.ceiling else { return false }
+        guard board.contains(column: f) else { return "edge of the field" }
+        guard board.piece(f, r) != nil else { return "nothing in front to climb" }
         let from = pip.cell
         if board.piece(f, r + 1) != nil {
             // Climb one cell up the side of the stack.
-            guard isFree(pip.column, r + 1) else { return false }
+            guard roomForPip(pip.column, r + 1) else {
+                return r + 1 + pip.carried.count >= board.ceiling ? "the Canopy is too low to climb"
+                    : "no room above Pip"
+            }
             pip.row += 1
             pip.clinging = true
         } else {
             // Clamber onto the top of the stack.
-            guard isFree(f, r + 1), isFree(pip.column, r + 1) else { return false }
+            guard roomForPip(f, r + 1), roomForPip(pip.column, r + 1) else {
+                return "no room on top of the stack (Canopy or falling piece)"
+            }
             pip.column = f
             pip.row += 1
             pip.clinging = false
         }
         pip.begin(.climb, ticks: Rules.pipClimbTicks, from: from)
         events.append(.pipClimbed)
-        return true
+        return nil
     }
 
-    mutating func climbDown() -> Bool {
-        guard pip.clinging, pip.row > 0, isFree(pip.column, pip.row - 1) else { return false }
+    mutating func climbDown() -> String? {
+        guard pip.clinging else { return "not clinging" }
+        guard pip.row > 0, roomForPip(pip.column, pip.row - 1) else { return "something below" }
         let from = pip.cell
         pip.row -= 1
         let grounded = pip.row == 0 || board.piece(pip.column, pip.row - 1) != nil
         pip.clinging = !grounded && board.piece(pip.column + pip.facing.rawValue, pip.row) != nil
         pip.begin(.climb, ticks: Rules.pipClimbTicks, from: from)
         events.append(.pipClimbed)
-        return true
+        return nil
     }
 
     /// Pieces above `row` in column `c` were detached; let them drop.
@@ -305,13 +321,13 @@ public struct GameState: Codable, Equatable {
         }
     }
 
-    mutating func lift(whole: Bool) -> Bool {
-        guard !pip.isCarrying else { return false }
+    mutating func lift(whole: Bool) -> String? {
+        guard !pip.isCarrying else { return "already carrying" }
         let f = pip.column + pip.facing.rawValue
         let r = pip.row
-        guard board.piece(f, r) != nil else { return false }
+        guard board.piece(f, r) != nil else { return "no piece in front at Pip's height" }
         let n = whole ? board.height(f) - r : 1
-        guard isFree(pip.column, r + 1, height: n) else { return false }
+        guard isFree(pip.column, r + 1, height: n) else { return "no room above Pip for \(n) piece(s)" }
         var taken = board.removeFrom(column: f, row: r)
         if whole {
             pip.carried = taken
@@ -323,21 +339,21 @@ public struct GameState: Codable, Equatable {
         if pip.clinging && board.piece(f, r) == nil { pip.clinging = false }
         pip.begin(whole ? .lift : .pull, ticks: Rules.pipActionTicks, from: pip.cell)
         events.append(whole ? .lifted(count: n) : .pulled)
-        return true
+        return nil
     }
 
-    mutating func kick() -> Bool {
-        guard !pip.isCarrying else { return false }
+    mutating func kick() -> String? {
+        guard !pip.isCarrying else { return "can't kick while carrying" }
         let d = pip.facing.rawValue
         let f = pip.column + d
         let r = pip.row
-        guard board.piece(f, r) != nil else { return false }
+        guard board.piece(f, r) != nil else { return "no piece in front to kick" }
         var x = f
         while board.contains(column: x + d), board.piece(x + d, r) == nil,
               !fallers.contains(where: { $0.overlaps(x + d, r) }) {
             x += d
         }
-        guard x != f else { return false }
+        guard x != f else { return "the piece has nowhere to slide" }
         var taken = board.removeFrom(column: f, row: r)
         var kicked = taken.removeFirst()
         kicked.chainTag = 0
@@ -348,14 +364,18 @@ public struct GameState: Codable, Equatable {
         if pip.clinging && board.piece(f, r) == nil { pip.clinging = false }
         pip.begin(.kick, ticks: Rules.pipActionTicks, from: pip.cell)
         events.append(.kicked(from: Cell(f, r), to: Cell(x, r)))
-        return true
+        return nil
     }
 
-    mutating func place() -> Bool {
-        guard pip.isCarrying else { return false }
+    /// Put the load down in the column in front, at Pip's height (it then falls).
+    mutating func place() -> String? {
+        guard pip.isCarrying else { return "not carrying anything" }
         let f = pip.column + pip.facing.rawValue
         let n = pip.carried.count
-        guard isFree(f, pip.row, height: n) else { return false }
+        guard board.contains(column: f) else { return "edge of the field" }
+        guard isFree(f, pip.row, height: n) else {
+            return "front column is blocked at Pip's height (try Down to put it under Pip)"
+        }
         for (i, p) in pip.carried.enumerated() {
             fallers.append(Faller(piece: p, column: f, row: pip.row + i,
                                   speed: Rules.placeFallSpeed, origin: .placed))
@@ -363,7 +383,27 @@ public struct GameState: Codable, Equatable {
         pip.carried = []
         pip.begin(.place, ticks: Rules.pipActionTicks, from: pip.cell)
         events.append(.placed(count: n))
-        return true
+        return nil
+    }
+
+    /// Down while carrying: set the load down in Pip's own column and stand on top of it.
+    mutating func placeBelow() -> String? {
+        guard pip.isCarrying else { return "not carrying anything" }
+        let grounded = pip.row == 0 || board.piece(pip.column, pip.row - 1) != nil
+        guard grounded else { return "Pip must be standing on something" }
+        let n = pip.carried.count
+        // The load moves down into Pip's cell and Pip rises on top of it, so the
+        // total height is unchanged; only the cell above the load must be free.
+        guard roomForPip(pip.column, pip.row) else { return "no room" }
+        let from = pip.cell
+        for p in pip.carried { board.push(p, column: pip.column) }
+        pip.carried = []
+        pip.row += n
+        pip.clinging = false
+        pip.begin(.place, ticks: Rules.pipActionTicks, from: from)
+        events.append(.placed(count: n))
+        events.append(.placedBelow(count: n))
+        return nil
     }
 
     /// Whether Pip has anything at all he could do (used for the "trapped" loss).
@@ -373,11 +413,11 @@ public struct GameState: Codable, Equatable {
             || isFree(pip.column + 1, pip.row, height: pip.carried.count + 1) {
             return true
         }
-        let actions: [PipAction] = [.climb, .liftStack, .pull, .kick, .place]
+        let actions: [PipAction] = [.climb, .liftStack, .pull, .kick, .place, .placeBelow]
         for facing in [Facing.left, Facing.right] {
             var probe = self
             probe.pip.facing = facing
-            if probe.move(facing) { return true }
+            if probe.move(facing) == nil { return true }
             for a in actions {
                 var p = self
                 p.pip.facing = facing
@@ -531,9 +571,10 @@ public struct GameState: Codable, Equatable {
             }
             var ny = f.y - f.speed
             if let bt = blockTop, ny < bt { ny = bt }
-            // Coming down on Pip (or on what he carries)?
+            // Coming down on Pip (or on what he carries)? He catches it, unless
+            // that would push the pile into the Canopy.
             if pip.column == f.column && f.y >= pip.topY && ny <= pip.topY {
-                if pip.carried.isEmpty || pip.row + pip.carried.count + 1 >= board.ceiling {
+                if pip.row + pip.carried.count + 1 >= board.ceiling {
                     lose(.crushed)
                     kept.append(f)
                     continue

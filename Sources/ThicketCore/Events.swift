@@ -1,7 +1,7 @@
 public enum LossReason: Int, Codable, Hashable {
     /// A stack reached the Canopy.
     case overflow
-    /// A piece (or the Canopy) came down on Pip.
+    /// Pip (with his load) was pinned against the Canopy.
     case crushed
     /// Pip was boxed in with no legal move.
     case trapped
@@ -26,6 +26,8 @@ public enum GameEvent: Equatable {
     case pulled
     case placed(count: Int)
     case kicked(from: Cell, to: Cell)
+    case placedBelow(count: Int)
+    case actionRejected(action: PipAction, reason: String)
     case bump
     case caught
     case landed(cell: Cell, kind: PieceKind)

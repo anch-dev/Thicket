@@ -24,8 +24,8 @@ public enum Rules {
     public static let flickerFlashTicks = 240
 
     // Pip timings (ticks).
-    public static let pipWalkTicks = 7
-    public static let pipClimbTicks = 9
+    public static let pipWalkTicks = 6
+    public static let pipClimbTicks = 7
     public static let pipFallTicks = 3
     public static let pipActionTicks = 8
     /// Holding the opposite direction this long after turning starts walking.

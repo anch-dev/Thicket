@@ -38,6 +38,13 @@ public final class FileStore: KeyValueStore {
 
 // MARK: - Saved models
 
+public enum GraphicsMode: String, Codable, CaseIterable {
+    /// SceneKit 3D forest (default).
+    case threeD
+    /// The original crisp pixel-art SpriteKit renderer.
+    case pixel
+}
+
 public struct Settings: Codable, Equatable {
     public var musicVolume: Double = 0.6
     public var sfxVolume: Double = 0.85
@@ -45,6 +52,9 @@ public struct Settings: Codable, Equatable {
     public var haptics = true
     /// Show touch controls even when a controller/keyboard is connected.
     public var alwaysShowTouchControls = false
+    public var graphics: GraphicsMode = .threeD
+    /// Log every input, action and game event (for bug reports).
+    public var verboseLogging = false
     /// Saved per device class (see `ControlLayout.deviceKey`).
     public var controlLayouts: [String: ControlLayout] = [:]
 
@@ -68,6 +78,8 @@ public struct Settings: Codable, Equatable {
         haptics = (try? c.decode(Bool.self, forKey: .haptics)) ?? d.haptics
         alwaysShowTouchControls = (try? c.decode(Bool.self, forKey: .alwaysShowTouchControls)) ?? false
         controlLayouts = (try? c.decode([String: ControlLayout].self, forKey: .controlLayouts)) ?? [:]
+        graphics = (try? c.decode(GraphicsMode.self, forKey: .graphics)) ?? d.graphics
+        verboseLogging = (try? c.decode(Bool.self, forKey: .verboseLogging)) ?? false
         musicVolume = min(1, max(0, musicVolume))
         sfxVolume = min(1, max(0, sfxVolume))
     }

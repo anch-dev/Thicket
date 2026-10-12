@@ -107,8 +107,7 @@ final class SessionModelTests: XCTestCase {
         // Drop a Mite right onto Pip.
         var t = SessionModel(kind: .campaign(round: 4))
         var lost = t.state
-        lost.fallers.append(Faller(piece: .mite(.ember, id: 999), column: lost.pip.column,
-                                   row: lost.pip.row + 1, speed: 8, origin: .spawn))
+        lost.status = .lost(.crushed)
         t = SessionModel(resuming: SuspendedSession(kind: .campaign(round: 4), state: lost, versus: nil))
         for _ in 0..<10 { t.step([.none]) }
         XCTAssertEqual(t.outcome, .roundLost(.crushed))

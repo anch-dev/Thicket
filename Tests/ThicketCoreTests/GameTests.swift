@@ -77,21 +77,13 @@ final class GameTests: XCTestCase {
 
     // MARK: Falling pieces and Pip
 
-    func testPieceLandingOnPipCrushesHim() {
+    func testPieceLandingOnPipIsCaught() {
         var s = sandbox([], pip: 3)
         s.fallers.append(Faller(piece: .mite(.tide, id: 90), column: 3, row: 5, speed: 4, origin: .spawn))
         let ev = s.run(60)
-        XCTAssertEqual(s.status, .lost(.crushed))
-        XCTAssertTrue(ev.has { $0 == .gameOver(.crushed) })
-    }
-
-    func testPieceLandingOnCarriedLoadIsCaught() {
-        var s = sandbox([], pip: 3, carrying: [.mite(.ember, id: 89)])
-        s.fallers.append(Faller(piece: .mite(.tide, id: 90), column: 3, row: 6, speed: 4, origin: .spawn))
-        let ev = s.run(60)
         XCTAssertEqual(s.status, .playing)
         XCTAssertTrue(ev.has { $0 == .caught })
-        XCTAssertEqual(s.pip.carried.count, 2)
+        XCTAssertEqual(s.pip.carried.map(\.id), [90])
     }
 
     func testWalkingIntoAFallingPieceIsBlocked() {
@@ -205,8 +197,12 @@ final class GameTests: XCTestCase {
     // MARK: Trapped
 
     func testTrappedWithNoLegalMoveEndsRound() {
-        // Pip is down a one-wide pit holding a piece: he can't walk, climb or put it down.
-        var s = sandbox(["E . B"], pip: 1, carrying: [.mite(.tide, id: 90)])
+        // Pip is boxed in by pieces hanging in the air on both sides and above him.
+        var s = sandbox([], pip: 1, ceiling: 2)
+        for (c, r) in [(0, 0), (2, 0), (1, 1)] {
+            s.fallers.append(Faller(piece: .mite(.tide, id: 90 + c * 10 + r), column: c, row: r,
+                                    speed: 0, hang: 100_000, origin: .spawn))
+        }
         XCTAssertFalse(s.pipHasLegalMove)
         s.run(Rules.trappedGraceTicks - 1)
         XCTAssertEqual(s.status, .playing, "grace period")

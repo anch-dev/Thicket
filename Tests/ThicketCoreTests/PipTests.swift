@@ -26,7 +26,8 @@ final class PipTests: XCTestCase {
         s.tap(.right)
         XCTAssertEqual(s.pip.cell, Cell(3, 0), "walked off the edge and stepped down")
         s.tap(.right)
-        XCTAssertEqual(s.pip.cell, Cell(3, 0), "a 2-high wall blocks walking")
+        XCTAssertEqual(s.pip.cell, Cell(3, 1), "walking into a 2-high wall climbs its side")
+        XCTAssertTrue(s.pip.clinging)
     }
 
     // MARK: Climbing
@@ -63,9 +64,13 @@ final class PipTests: XCTestCase {
         // Cannot climb with nothing in front.
         var a = sandbox([], pip: 3)
         XCTAssertFalse(a.perform(.climb))
-        // Cannot climb while carrying.
+        // Climbing while carrying works when the load fits under the Canopy…
         var b = sandbox([". . . . E", ". . . . T"], pip: 3, carrying: [.seed(.tide, id: 99)])
-        XCTAssertFalse(b.perform(.climb))
+        XCTAssertTrue(b.perform(.climb))
+        // …but not when the load would hit it.
+        var b2 = sandbox([". . . . E", ". . . . T"], pip: 3,
+                         carrying: [.seed(.tide, id: 98), .seed(.bloom, id: 99)], ceiling: 3)
+        XCTAssertFalse(b2.perform(.climb))
         // Cannot climb into an occupied cell (a piece is falling right above Pip).
         var c = sandbox([". . . . E", ". . . . T"], pip: 3)
         c.fallers.append(Faller(piece: .seed(.tide, id: 98), column: 3, row: 1, speed: 2, hang: 100, origin: .spawn))
@@ -141,7 +146,8 @@ final class PipTests: XCTestCase {
                         carrying: [.mite(.ember, id: 90), .mite(.tide, id: 91)], ceiling: 3)
         XCTAssertTrue(s.perform(.walkRight))
         var t = sandbox([". . . . E"], pip: 3, facing: .right, carrying: [.mite(.ember, id: 90)])
-        XCTAssertFalse(t.perform(.walkRight), "no stepping up while carrying")
+        XCTAssertTrue(t.perform(.walkRight), "steps up with the load")
+        XCTAssertEqual(t.pip.cell, Cell(4, 1))
     }
 
     // MARK: Kicking
@@ -197,5 +203,71 @@ final class PipTests: XCTestCase {
         s.step(.tap(.a))
         s.run(40)
         XCTAssertFalse(s.pip.isCarrying)
+    }
+
+    // MARK: Placing below, climbing by walking, rejection reasons
+
+    func testDownPutsLoadUnderPip() {
+        var s = sandbox([". . . . T", ". . . . E"], pip: 3, facing: .right)
+        s.tap(.a) // lift 2
+        XCTAssertEqual(s.pip.carried.count, 2)
+        let ev = s.tap(.down)
+        XCTAssertTrue(ev.has { $0 == .placedBelow(count: 2) })
+        XCTAssertTrue(s.pip.carried.isEmpty)
+        XCTAssertEqual(s.pip.cell, Cell(3, 2), "Pip stands on top of what he put down")
+        XCTAssertEqual(s.board.notation, [". . . T", ". . . E"])
+    }
+
+    func testDownPutsLoadUnderPipOnTopOfAStack() {
+        var s = sandbox([". . . B"], pip: 3, carrying: [.mite(.ember, id: 90)])
+        XCTAssertEqual(s.pip.row, 1)
+        s.tap(.down)
+        XCTAssertEqual(s.board.notation, [". . . E", ". . . B"])
+        XCTAssertEqual(s.pip.row, 2)
+    }
+
+    func testPlaceBelowCanMakeAMatch() {
+        var s = sandbox(["E E"], pip: 2, carrying: [.seed(.ember, id: 90)])
+        let ev = s.tap(.down)
+        XCTAssertEqual(ev.clears.count, 1)
+        XCTAssertEqual(s.board.pieceCount, 0)
+        XCTAssertEqual(s.pip.row, 0, "Pip drops back down after the clear")
+    }
+
+    func testHoldingTowardAStackClimbsAllTheWayUp() {
+        var s = sandbox([". . . . E", ". . . . T", ". . . . B"], pip: 3, facing: .right)
+        var n = 0
+        while s.pip.cell != Cell(4, 3) && n < 120 {
+            s.step(InputFrame(held: .right))
+            n += 1
+        }
+        XCTAssertEqual(s.pip.cell, Cell(4, 3), "climbed the side and stepped onto the top")
+        XCTAssertFalse(s.pip.clinging)
+    }
+
+    func testCanClimbOutOfAPitWhileCarrying() {
+        var s = sandbox([". . T", "E . B"], pip: 1, facing: .right, carrying: [.seed(.tide, id: 90)])
+        var n = 0
+        while s.pip.cell != Cell(2, 2) && n < 120 {
+            s.step(InputFrame(held: .right))
+            n += 1
+        }
+        XCTAssertEqual(s.pip.cell, Cell(2, 2))
+        XCTAssertEqual(s.pip.carried.count, 1)
+    }
+
+    func testRejectedActionsExplainWhy() {
+        var s = sandbox([], pip: 3)
+        let ev = s.tap(.a)
+        XCTAssertTrue(ev.has {
+            if case let .actionRejected(action, reason) = $0 { return action == .liftStack && !reason.isEmpty }
+            return false
+        })
+        var t = sandbox([". . . . E"], pip: 3, facing: .right, carrying: [.mite(.tide, id: 90)])
+        let ev2 = t.tap(.up)
+        XCTAssertTrue(ev2.has {
+            if case let .actionRejected(action, reason) = $0 { return action == .place && reason.contains("Down") }
+            return false
+        })
     }
 }
