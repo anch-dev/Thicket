@@ -4,7 +4,7 @@ name: Build IPA
 # The sideloading tool re-signs it with your Apple ID when installing.
 #
 # Run it from the Actions tab ("Run workflow"), or push a tag like v1.0.
-# The .ipa is attached to a GitHub Release:
+# The .ipa is published as a plain file (not a zipped artifact) on a GitHub Release:
 #   - manual runs / branch pushes -> the rolling "latest" pre-release
 #   - v* tags                      -> a release named after the tag
 
@@ -60,12 +60,6 @@ jobs:
           plutil -p build/Payload/Thicket.app/Info.plist | grep -E "CFBundleIdentifier|CFBundleShortVersionString|MinimumOSVersion"
           ls -lh build/Thicket.ipa
 
-      - uses: actions/upload-artifact@v5
-        with:
-          name: Thicket-ipa
-          path: build/Thicket.ipa
-          compression-level: 0
-
       - name: Publish to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -80,3 +74,7 @@ jobs:
               --target "$GITHUB_SHA" --title "Thicket (latest build)" \
               --notes "Unsigned build of ${GITHUB_SHA::7} for sideloading. Re-sign with AltStore, SideStore or Sideloadly."
           fi
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG:-latest}/Thicket.ipa"
+          echo "### Thicket.ipa" >> "$GITHUB_STEP_SUMMARY"
+          echo "Direct download (plain .ipa, not zipped): $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "IPA: $URL"
