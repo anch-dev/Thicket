@@ -396,19 +396,24 @@ struct GameScreen: View {
             GameContainer(runner: runner, model: model)
                 .ignoresSafeArea()
             if let lesson = runner.session.lesson, runner.outcome == .none {
+                // Top-left, beside the playfield and above the D-pad.
                 VStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(lesson.title.uppercased()).font(pixelFont(13)).foregroundColor(Palette.leaf)
-                        Text(lesson.text).font(pixelFont(11)).foregroundColor(.white)
-                            .fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(lesson.title.uppercased()).font(pixelFont(13)).foregroundColor(Palette.leaf)
+                            Text(lesson.text).font(pixelFont(10)).foregroundColor(.white)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(8)
+                        .frame(width: 215, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.7)))
+                        .allowsHitTesting(false)
+                        Spacer()
                     }
-                    .padding(8)
-                    .frame(maxWidth: 380, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.7)))
-                    .allowsHitTesting(false)
                     Spacer()
                 }
-                .padding(.top, 4)
+                .padding(.top, 6)
+                .padding(.leading, 6)
             }
             if runner.paused && runner.outcome == .none {
                 PauseOverlay(runner: runner)

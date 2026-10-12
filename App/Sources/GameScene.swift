@@ -422,19 +422,24 @@ final class GameScene: SKScene {
             let top = artSize.height - 4
             let rightX = b.position.x + b.fieldWidth + 8
             let label: UInt32 = 0x9CDB6EFF
-            let title: String
+            // Two short lines so the text always fits the 40 px side panel.
+            let title: (String, String)
             switch session.kind {
-            case let .campaign(round): title = "ROUND \(round)"
-            case .endless: title = "ENDLESS"
-            case let .timeTrial(_, i, _): title = "TRIAL \(i + 1)"
-            case .lesson: title = "LESSON"
-            case .versus: title = "VERSUS"
+            case let .campaign(round): title = ("ROUND", String(round))
+            case .endless: title = ("MODE", "ENDLS")
+            case let .timeTrial(_, i, _): title = ("TRIAL", "\(i + 1)/\(session.trail?.rounds.count ?? 0)")
+            case .lesson: title = ("", "")
+            case .versus: title = ("VS", "")
             }
-            setHUD("title", title, x: 0, y: top, color: label)
-            setHUD("scoreL", "SCORE", x: 0, y: top - 14, color: label)
-            setHUD("score", String(s.score), x: 0, y: top - 23)
-            setHUD("mitesL", "MITES", x: 0, y: top - 37, color: label)
-            setHUD("mites", String(s.mitesRemaining), x: 0, y: top - 46)
+            // Lessons show their instructions on the left instead of the score panel.
+            if session.lesson == nil {
+                setHUD("titleL", title.0, x: 0, y: top, color: label)
+                setHUD("title", title.1, x: 0, y: top - 9)
+                setHUD("scoreL", "SCORE", x: 0, y: top - 23, color: label)
+                setHUD("score", String(s.score), x: 0, y: top - 32)
+                setHUD("mitesL", "MITES", x: 0, y: top - 46, color: label)
+                setHUD("mites", String(s.mitesRemaining), x: 0, y: top - 55)
+            }
             setHUD("timeL", "TIME", x: rightX, y: top, color: label)
             setHUD("time", Self.clock(session.trialTicks), x: rightX, y: top - 9)
             setHUD("chainL", "CHAIN", x: rightX, y: top - 23, color: label)
