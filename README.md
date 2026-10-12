@@ -19,7 +19,7 @@ All names, characters, art, music and sound in Thicket are original. The art is 
 | Flicker Mite (spark) | The first hit makes it flash for 4 s. It must be hit again while it is flashing. |
 | Chains | Pieces that fall after a clear and then make a new match count as a chain step. Multipliers per step are ×1, ×2, ×3, ×5, ×8, ×12, ×16. A chain combo text appears on screen. |
 | Phases | Wren drops Seeds while the meter fills. Then the Gloom drops Mites, and the Canopy slams down one row every few seconds. Each chain step shortens the Gloom phase. When Wren returns she pushes the Canopy up one row. |
-| Losing | A stack touches the Canopy, a piece lands on Pip's head, or Pip is boxed in with no legal move for 1.5 s. |
+| Losing | A stack touches the Canopy, or the Canopy slams down on Pip (and his load), or Pip is boxed in with no legal move for 1.5 s. Pieces that fall on Pip are **caught** and added to what he carries. |
 | Rounds | 99 campaign rounds. Later rounds start with more Mites and taller stacks, drop pieces faster, and add Slant (round 8+), Shifter (16+) and Flicker (24+) Mites. |
 
 Colors are chosen to be colorblind-friendly (based on the Okabe-Ito palette). Each color also has its own shape:
@@ -45,15 +45,16 @@ Pieces that Pip is carrying are out of play. They don't match and Starseeds don'
 | Action | Touch | Controller | Keyboard |
 |---|---|---|---|
 | Walk / turn | D-pad ←/→ (tapping the other way turns first) | D-pad / left stick | ←/→ or A/D |
-| Climb the stack in front, one cell per press | Up | Up | ↑ or W |
+| Climb the stack in front, one cell at a time (works while carrying if there's room) | Walk into it, or Up | same | same |
 | Climb down while clinging | Down | Down | ↓ or S |
 | Lift the piece in front **and everything above it** | A | A (south) | X or K |
 | Pull out **only** the piece in front | B | B (east) | Z or J |
-| Put down what you carry (in front) | Up, A+B, A or B | Up, X/Y, A or B | ↑, C/L/Space, X or Z |
+| Put down what you carry **in front** | Up, A+B, A or B | Up, X/Y, A or B | ↑, C/L/Space, X or Z |
+| Put down what you carry **under Pip** (he stands on it) | Down | Down | ↓ or S |
 | Kick the piece in front | Hold Down + A | Down + A | ↓ + X |
 | Pause | II / START | Menu | Esc / P / Return |
 
-Pip can only reach the piece directly in front of him at his own height. He cannot climb while carrying.
+Pip can only reach the piece directly in front of him at his own height.
 
 The touch controls are fully multitouch:
 
@@ -64,6 +65,22 @@ The touch controls are fully multitouch:
 - Presses made up to 8 frames before Pip is ready are buffered.
 
 To customize the controls, go to **Settings → Edit touch controls**. You can drag controls to new positions and change their size and opacity. The layout is saved separately for each device size. The on-screen pad hides itself while a controller or keyboard is in use, unless *Always show touch controls* is on.
+
+## Graphics
+
+**Settings → Graphics** switches between:
+
+- **3D** (default): a SceneKit forest. All the models are built from code: rounded Mites, acorn Seeds, star Starseeds, Pip, Wren, the Gloom and the Canopy. It has shadows, particles and landing markers for dropping pieces.
+- **Pixel 2D**: the original SpriteKit pixel art.
+
+Both modes draw the same simulation, and the HUD is pixel text in both.
+
+## Logging (for bug reports)
+
+- Logs are always written to `thicket-log.txt` in the app's Documents folder. In the Files app it's under *On My iPhone › Thicket*. Logs also go to the system log under the subsystem `dev.anch.thicket`.
+- By default the log records: launches, settings, lifecycle, audio sessions, controllers, game starts and outcomes, a board dump on game over, and **every rejected action with the reason**, for example `rejected climb: no room on top of the stack (Canopy or falling piece)`.
+- With **Settings → Verbose logging** turned on, it also records every input change, touch press and release, and game event.
+- **Settings → View / Share log** shows the log and opens the share sheet.
 
 ## Project layout
 
