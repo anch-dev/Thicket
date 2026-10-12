@@ -41,12 +41,12 @@ final class AppModel: ObservableObject {
         settings = loadedSettings
         save = persistence.loadSave()
         suspended = persistence.loadSuspended()
-        GameLog.shared.info("app", "loaded save: unlocked round \(save.campaign.unlockedRound), lessons \(save.lessonsCompleted.count), suspended game: \(suspended.map { "\($0.kind)" } ?? "none")")
-        GameLog.shared.info("app", "settings: graphics=\(settings.graphics) music=\(settings.musicVolume) sfx=\(settings.sfxVolume) muted=\(settings.muted) haptics=\(settings.haptics)")
         isPad = UIDevice.current.userInterfaceIdiom == .pad
         let bounds = UIScreen.main.bounds
         deviceKey = ControlLayout.deviceKey(idiom: isPad ? "pad" : "phone",
                                             screenWidth: Double(bounds.width), screenHeight: Double(bounds.height))
+        GameLog.shared.info("app", "loaded save: unlocked round \(save.campaign.unlockedRound), lessons \(save.lessonsCompleted.count), suspended game: \(suspended.map { "\($0.kind)" } ?? "none")")
+        GameLog.shared.info("app", "settings: graphics=\(settings.graphics) music=\(settings.musicVolume) sfx=\(settings.sfxVolume) muted=\(settings.muted) haptics=\(settings.haptics) device=\(deviceKey)")
         audio.apply(settings)
         haptics.enabled = settings.haptics
         audio.play(song: SongLibrary.menu)
