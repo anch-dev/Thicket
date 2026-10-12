@@ -41,6 +41,15 @@ final class AppModel: ObservableObject {
         audio.apply(settings)
         haptics.enabled = settings.haptics
         audio.play(song: SongLibrary.menu)
+        // Used by CI screenshots: `-autostart round|lesson|versus`.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-autostart"), i + 1 < args.count {
+            switch args[i + 1] {
+            case "lesson": start(.lesson(id: "climb"))
+            case "versus": start(.versus)
+            default: start(.campaign(round: 12))
+            }
+        }
     }
 
     static func makePersistence() -> Persistence {

@@ -56,3 +56,25 @@ if [[ "$WHAT" == "all" || "$WHAT" == "device" ]]; then
   (cd build && zip -qry Thicket-unsigned.ipa Payload)
   echo "Wrote build/Thicket-unsigned.ipa (unsigned; re-sign to install)"
 fi
+
+if [[ "$WHAT" == "screens" ]]; then
+  # Launch the simulator build and capture screenshots (title screen and a round in play).
+  SIM="$(pick_simulator)"
+  xcrun simctl boot "$SIM" || true
+  xcrun simctl bootstatus "$SIM" -b
+  xcodebuild -project Thicket.xcodeproj -scheme Thicket -configuration Debug \
+    -destination "id=$SIM" -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO build -quiet
+  APP="$DERIVED/Build/Products/Debug-iphonesimulator/Thicket.app"
+  xcrun simctl install "$SIM" "$APP"
+  mkdir -p build/screens
+  xcrun simctl launch "$SIM" dev.anch.thicket
+  sleep 6
+  xcrun simctl io "$SIM" screenshot build/screens/title.png
+  for mode in round lesson; do
+    xcrun simctl terminate "$SIM" dev.anch.thicket || true
+    xcrun simctl launch "$SIM" dev.anch.thicket -autostart "$mode"
+    sleep 9
+    xcrun simctl io "$SIM" screenshot "build/screens/$mode.png"
+  done
+  ls -la build/screens
+fi

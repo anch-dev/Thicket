@@ -30,6 +30,8 @@ jobs:
         run: scripts/build.sh test
       - name: Simulator + unsigned arm64 device build
         run: scripts/build.sh device
+      - name: Simulator screenshots
+        run: scripts/build.sh screens
       - uses: actions/upload-artifact@v5
         if: always()
         with:
@@ -37,4 +39,5 @@ jobs:
           path: |
             build/Thicket-unsigned.ipa
             build/test.log
+            build/screens/*.png
           if-no-files-found: ignore
